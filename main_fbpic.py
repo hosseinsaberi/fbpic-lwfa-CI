@@ -50,7 +50,7 @@ from fbpic.openpmd_diag import FieldDiagnostic, ParticleDiagnostic, ParticleChar
      set_periodic_checkpoint, restart_from_checkpoint
 from diagnostics_fbpic import field_diags, particle_diags, particle_charge_density_diags
 from synchrotron_fbpic import synchrotron
-#from plasma_dens import gasjet_dens_ramp, capillary_dens_ramp_gaussian, capillary_dens_ramp_parabolic
+from beam_fbpic import add_witness
 
 # ============================================================
 #                 SIMULATION GLOBAL SETTINGS
@@ -68,14 +68,14 @@ use_synchrotron = True # Enable synchrotron radiation module
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
 # Longitudinal box (z in metres)
-Nz   = 500                                             # Number of grid points along z (longitudinal direction)
-zmin = -30.0e-6                                        # Left boundary of the box in z (meters)
-zmax = 10.0e-6                                         # Right boundary of the box in z (meters)
+Nz   = 2000                                             # Number of grid points along z (longitudinal direction)
+zmin = -140.0e-6                                        # Left boundary of the box in z (meters)
+zmax = 20.0e-6                                         # Right boundary of the box in z (meters)
 dz = (zmax - zmin) / Nz                                # Cell size; dz should resolve laser/plasma 
 
 # Radial box (r)
 Nr   = 200                                             # Number of grid points along r (radial direction) - 20–40 cells across rb
-rmax = 100e-6 #20.0e-6                                           # Radial box size (meters): 0 <= r <= rmax
+rmax = 300e-6 #20.0e-6                                           # Radial box size (meters): 0 <= r <= rmax
 dr = rmax / Nr                                         # Cell size
 
 # Azimuthal modes (quasi‑cylindrical)
@@ -88,15 +88,13 @@ dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz �
 # ============================================================
 #                   BACKGROUND PLASMA SETUP
 # ============================================================
-plasma_type = 'gas_jet_parabolic_radiator' # gas_jet, capillary, capillary-2stage, gas_jet_parabolic, gas_jet_parabolic_radiator
 p_zmin = 0.0e-6                                       # Start position of plasma region (meters)
 #p_zmax = 500.0e-6                                    # End position of plasma region (meters) ✅ If not defined, Plasma has no hard cutoff
 #p_rmax = 18e-6	                                     # Radial extent of plasma (meters) ✅ If not defined, Plasma fills the entire radial domain
 
 # Macro-particle sampling per cell along z, r and theta
-p_nz_He = 2     	 # or 8#
-p_nz_N = 4     	     # Fot N is higher because beam quality depends on sampling of ionization electrons.
-p_nz_ele = p_nz_He     	 # as He is main plasma
+p_nz_H = 2     	 # or 8#
+p_nz_ele = p_nz_H     	 # as He is main plasma
 p_nr = 2      	 # or 8
 p_nt = 4     	 # optional: 8–16 for smoother plasma noise
 		 # p_nt ≥ 4 × Nm for proper mode resolution.
@@ -105,466 +103,79 @@ p_nt = 4     	 # optional: 8–16 for smoother plasma noise
 # Plasma density ramp
 # ###################
 # Background plasma density (m^-3)
-if plasma_type == 'gas_jet':
-    n_He = 3.0e18 * 1e6     # Density of Helium atoms
-    n_N =  0.01 * n_He      # Density of Nitrogen atoms (1% / 99%)
+# Peak density (convert cm^-3 → m^-3)
+n0 = 1e17 * 1e6   # m^-3
     
-    # Simulation window is initiated outside of the plasma
-    ramp_start = 0.e-6
-    ramp_length = 20.e-6 # Lramp∼5λp to 20λp; Too short ramp (sharp boundary) Too long ramp laser diffracts
+# Simulation window is initiated outside of the plasma
+# Positions (in meters)
+z_start  = 0.0
+z_ramp_up_end   = 1.0e-3
+z_plateau_end   = 6.0e-3
+z_ramp_down_end = 7.0e-3
 
-    # Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
-    L_interact = 1.2e-3                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
-    L_dump     = 200e-6                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
-elif plasma_type == 'gas_jet_parabolic':
-    n_He = 3.0e18 * 1e6     # Density of Helium atoms
-    n_N =  0.01 * n_He      # Density of Nitrogen atoms (1% / 99%)
-    n_axis = 1/3.  # adjust to control channel depth
-    
-    # Simulation window is initiated outside of the plasma
-    ramp_start = 0.e-6
-    ramp_length = 20.e-6 # Lramp∼5λp to 20λp; Too short ramp (sharp boundary) Too long ramp laser diffracts
-    
-    R_cap = 90e-6       # [m] capillary radius - ✅ realistic 150e-6 to 200e-6
-    
-    # Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
-    L_interact = 6e-3                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
-    L_dump     = 120e-6                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact 
-elif plasma_type == 'gas_jet_parabolic_radiator':
-    n_He = 3.0e18 * 1e6     # Density of Helium atoms
-    n_N =  0.01 * n_He      # Density of Nitrogen atoms (1% / 99%)
-    n_axis = 1/3.  # adjust to control channel depth
-    
-    # Simulation window is initiated outside of the plasma
-    ramp_start = 0.e-6
-    ramp_length = 20.e-6 # Lramp∼5λp to 20λp; Too short ramp (sharp boundary) Too long ramp laser diffracts
-    
-    R_cap = 90e-6       # [m] capillary radius - ✅ realistic 150e-6 to 200e-6
-    
-    # Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
-    L1 = 6e-3 # capillary
-    L_interact = 6e-3 + 1e-3                                # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
-    L_dump     = 120e-6                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
-    n_max  = 2
-    
-elif plasma_type == 'capillary' or 'capillary-2stage':
-    n_He = 3e18 * 1e6     # Density of Helium atoms
-    n_N =  0.01 * n_He      # Density of Nitrogen atoms (1% / 99%)
-    n_axis = 1/3.  # adjust to control channel depth
-    
-    # Simulation window is initiated outside of the plasma
-    ramp_start = 0.e-6
-    ramp_length = 20.e-6 # Lramp∼5λp to 20λp; Too short ramp (sharp boundary) Too long ramp laser diffracts
-
-    #r_width = 20.e-6     # [m] Gaussian radius (controls transverse density width) - r_width ≈ w0
-    
-    R_cap = 90e-6       # [m] capillary radius - ✅ realistic 150e-6 to 200e-6
-                         # Even though it extends beyond the box, this is physically correct:
-                         # Your plasma profile will simply be cut at the boundary Still valid if you're modeling the central channel region
-
-    L_interact = 1e-2                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
-    L_dump     = 200e-6                                  # Desired spatial diagnostic interval along propagation (meters) based on L_interact
-    if plasma_type == 'capillary-2stage':
-        L_flat = L_interact - (ramp_start+ramp_length)
-        ramp2_length = ramp_length
-        n_max  = 10
-        L_interact = L_interact+2e-3 #2.2cm         # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
-        L_dump     = 200e-6                                  # Desired spatial diagnostic interval along propagation (meters) based on L_interact
-        
-        
-        
-
-# ###########################
-# Plasma density ramp in HOFI
-# ###########################
-# Background plasma density (m^-3)
-if plasma_type == 'dens_ramp_HeN_hofi':
-    n_He = 3.0e18 * 1e6     # Density of Helium atoms
-    n_N =  0.01 * n_He      # Density of Nitrogen atoms (1% / 99%)
-    
-    # Simulation window is initiated outside of the plasma
-    ramp_start = 0.e-6
-    ramp_length = 50.e-6  # Lramp∼5λp to 20λp; Too short ramp (sharp boundary) Too long ramp laser diffracts
-    
-    # HOFI channel parameters (physically meaningful)
-    n_axis   = 1.0        # on-axis normalized density
-    r0      = 10e-6   # MUST be ~ w0 (very important!)
-    delta_n = 0.05    # stronger channel (5%)
-    r_cap   = 40e-6   # ~3–4 × r0
+# Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
+L_interact = z_ramp_down_end                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
+L_dump     = 0.1e-3                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
 
 # ============================================================
 #                     PLASMA DENSITY FUNC
 # ============================================================
-def dens_ramp_HeN_hofi(z, r):
-    """Returns normalized plasma density n(z, r) for a HOFI channel"""
-
-    # -----------------------
-    # Longitudinal density (your ramp)
-    # -----------------------
-    nz = np.ones_like(z)
-
-    # linear ramp
-    nz = np.where(z < ramp_start + ramp_length,
-                  (z - ramp_start) / ramp_length, nz)
-
-    # zero before plasma
-    nz = np.where(z < ramp_start, 0.0, nz)
-
-    # -----------------------
-    # Radial density (HOFI channel)
-    # -----------------------
-    # Ideal parabolic channel near axis
-    nr = n_axis + delta_n * (r**2 / r0**2)
-
-    # Smooth saturation (physically realistic outer profile)
-    # prevents density going to infinity
-    nr = n_axis + delta_n * (r**2 / r0**2) * np.exp(-(r**2) / r_cap**2)
-
-    # -----------------------
-    # Total density
-    # -----------------------
-    return nz * nr
-
-
-def gasjet_dens_ramp(z, r):
+def dens_func(z, r):
     """
-    Compute relative gas jet density profile with a linear axial ramp.
-
-    Parameters
-    ----------
-    z : array_like
-        Longitudinal coordinate.
-    r : array_like
-        Radial coordinate (unused here, included for interface consistency).
-
-    Returns
-    -------
-    n : ndarray
-        Relative density profile n(z), normalized to 1 after the ramp.
-    
-    Notes
-    -----
-    - Density increases linearly from 0 to 1 over the ramp length.
-    - Density is zero before the start of the ramp.
-    - Assumes global parameters:
-        ramp_start : float
-        ramp_length : float
+    Plasma density profile (m^-3) for:
+    - 1 mm up-ramp
+    - 5 mm plateau
+    - 1 mm down-ramp
+    Smooth sin^2 ramps
     """
-    # Start with uniform density = 1 everywhere
-    n = np.ones_like(z)
 
-    # Apply linear ramp region: 0 → 1 over ramp_length
-    n = np.where(z < ramp_start + ramp_length,
-                 (z - ramp_start) / ramp_length,
-                 n)
+    # Initialize density
+    n = np.zeros_like(z)
 
-    # Enforce zero density before ramp start
-    n = np.where(z < ramp_start, 0.0, n)
+    # ----------------------
+    # Up ramp (0 → 1 mm)
+    # ----------------------
+    mask_up = (z >= z_start) & (z < z_ramp_up_end)
+    xi = (z[mask_up] - z_start) / (z_ramp_up_end - z_start)
+    n[mask_up] = n0 * np.sin(0.5 * np.pi * xi)**2
+
+    # ----------------------
+    # Plateau (1 → 6 mm)
+    # ----------------------
+    mask_plateau = (z >= z_ramp_up_end) & (z < z_plateau_end)
+    n[mask_plateau] = n0
+
+    # ----------------------
+    # Down ramp (6 → 7 mm)
+    # ----------------------
+    mask_down = (z >= z_plateau_end) & (z < z_ramp_down_end)
+    xi = (z[mask_down] - z_plateau_end) / (z_ramp_down_end - z_plateau_end)
+    n[mask_down] = n0 * np.cos(0.5 * np.pi * xi)**2
 
     return n
 
 
-def capillary_dens_ramp_gaussian(z, r):
-    """
-    Compute capillary density profile with axial linear ramp and Gaussian radial profile.
-
-    Parameters
-    ----------
-    z : array_like
-        Longitudinal coordinate.
-    r : array_like
-        Radial coordinate.
-
-    Returns
-    -------
-    n : ndarray
-        2D relative density profile n(z, r).
-
-    Notes
-    -----
-    Axial profile:
-        - Linear ramp from 0 to 1 over ramp_length
-        - Zero before ramp_start
-
-    Radial profile:
-        - Gaussian: exp(-r^2 / r_width^2)
-
-    Assumes global parameters:
-        ramp_start : float
-        ramp_length : float
-        r_width : float
-    """
-
-    # ----- Axial density profile -----
-    n_z = np.ones_like(z)
-    n_z = np.where(z < ramp_start + ramp_length,
-                   (z - ramp_start) / ramp_length,
-                   n_z)
-    n_z = np.where(z < ramp_start, 0.0, n_z)
-
-    # ----- Radial Gaussian profile -----
-    n_r = np.exp(-(r**2) / (r_width**2))
-
-    # Combine axial and radial dependence
-    return n_z * n_r
-
-
-def capillary_dens_ramp_parabolic(z, r):
-    """
-    Compute capillary discharge plasma density with:
-    - axial linear ramp
-    - physically correct radial parabolic channel
-
-    Parameters
-    ----------
-    z : array_like
-        Longitudinal coordinate.
-    r : array_like
-        Radial coordinate.
-
-    Returns
-    -------
-    n : ndarray
-        2D relative density profile n(z, r).
-
-    Physics
-    -------
-    In a capillary discharge:
-    - Plasma is hottest on axis → expands → lower density
-    - Plasma is cooler near wall → higher density
-    - Result: density MINIMUM at axis, MAXIMUM at wall
-
-    Radial profile is therefore:
-        n(r) = n_axis + (n_wall - n_axis)*(r/R_cap)^2
-
-    The axial profile models a gas/plasma ramp:
-        - zero before ramp_start
-        - linear increase over ramp_length
-        - constant afterward
-
-    Assumes global parameters:
-        ramp_start : float
-        ramp_length : float
-        R_cap : float
-    """
-
-    # ----- Axial density profile -----
-    # Start with full density everywhere
-    n_z = np.ones_like(z)
-
-    # Apply linear ramp region
-    # Between ramp_start and ramp_start + ramp_length,
-    # density increases from 0 → 1
-    n_z = np.where(z < ramp_start + ramp_length,
-                   (z - ramp_start) / ramp_length,
-                   n_z)
-
-    # Before ramp_start → density = 0
-    n_z = np.where(z < ramp_start, 0.0, n_z)
-
-    # ----- Radial parabolic profile (physically correct) -----
-    # n_axis: minimum density at center (hot plasma core)
-    # Increase toward wall due to cooling → higher density
-    
-    # Parabolic increase from axis to wall
-    n_r = n_axis + (1.0 - n_axis) * (r / R_cap) ** 2
-
-    # Ensure numerical safety (no negative or >1 values)
-    n_r = np.clip(n_r, 0.0, 1.0)
-
-    # ----- Combine axial and radial profiles -----
-    # Final density is product of longitudinal and transverse structure
-    return n_z * n_r
-
-#*************************************
-def capillary_dens_ramp_parabolic_radiator(z, r):
-    """
-    Compute plasma density in a capillary discharge with two regions:
-
-    REGION 1 (z < L1):
-        - Axial: linear density ramp (0 → 1) followed by flat region
-        - Radial: parabolic channel (physically realistic)
-            * minimum density at axis (hot core)
-            * maximum density at wall (cooler plasma)
-
-    REGION 2 (z >= L1):
-        - Density becomes:
-            * uniform in radius (no channel structure)
-            * 10× higher than baseline plasma
-
-    Parameters
-    ----------
-    z : array_like
-        Longitudinal coordinate.
-    r : array_like
-        Radial coordinate.
-
-    Returns
-    -------
-    n : ndarray
-        2D density profile n(z, r).
-
-    Assumes global parameters
-    -------------------------
-    ramp_start : float
-        Start position of density ramp.
-
-    ramp_length : float
-        Length over which density increases linearly.
-
-    R_cap : float
-        Capillary radius.
-
-    n_axis : float
-        Relative density at axis (minimum of parabolic profile).
-
-    L1 : float
-        Position where plasma transitions to uniform high-density region.
-    """
-
-    # ============================================================
-    # 1) AXIAL PROFILE (ramp + flat region)
-    # ============================================================
-    # Initialize with full density (n = 1) everywhere
-    n_z = np.ones_like(z)
-
-    # Apply linear ramp:
-    # Between ramp_start and ramp_start + ramp_length,
-    # density increases smoothly from 0 to 1
-    n_z = np.where(z < ramp_start + ramp_length,
-                   (z - ramp_start) / ramp_length,
-                   n_z)
-
-    # Before ramp_start, density is zero (no plasma)
-    n_z = np.where(z < ramp_start, 0.0, n_z)
-
-    # ============================================================
-    # 2) RADIAL PROFILE (parabolic channel)
-    # ============================================================
-    # Physical model:
-    # - Hot core → expansion → low density at axis
-    # - Cooler edge → compressed → higher density at wall
-    #
-    # Parabolic form:
-    #   n(r) = n_axis + (1 - n_axis)*(r/R_cap)^2
-    n_r = n_axis + (1.0 - n_axis) * (r / R_cap) ** 2
-
-    # Ensure no negative or unphysical values
-    n_r = np.clip(n_r, 0.0, 1.0)
-
-    # Combine axial and radial dependence
-    n = n_z * n_r
-
-    # ============================================================
-    # 3) HIGH-DENSITY UNIFORM REGION (z >= L1)
-    # ============================================================
-    # After position L1:
-    # - Remove radial structure (uniform plasma)
-    # - Increase density by factor of 10
-    mask_after = z >= L1
-
-    n[mask_after] = n_max
-
-    # ============================================================
-    # Final result
-    # ============================================================
-    return n
-#**************************************
-
-def capillary_dens_two_stage(z, r):
-    """
-    Capillary density with:
-      - First linear upramp (0 → 1)
-      - Flat region (1)
-      - Second ramp (1 → n_max)
-      - Final flat region (n_max) up to L_interact
-      - Zero beyond interaction length
-      - Parabolic radial profile
-
-    Global parameters required:
-        ramp_start
-        ramp_length
-        L_flat
-        ramp2_length
-        L_interact       # base interaction length
-        R_cap
-
-    Internal constants:
-        n_max = 10
-    """
-
-    # Extend interaction length (your requirement)
-    L_total = L_interact 
-
-    # ----- Define transition points -----
-    z0 = ramp_start
-    z1 = z0 + ramp_length
-    z2 = z1 + L_flat
-    z3 = z2 + ramp2_length
-    z4 = L_total
-
-    # ----- Axial profile -----
-    n_z = np.zeros_like(z)
-
-    # Region 1: ramp1 (0 → 1)
-    mask1 = (z >= z0) & (z < z1)
-    n_z[mask1] = (z[mask1] - z0) / ramp_length
-
-    # Region 2: flat (1)
-    mask2 = (z >= z1) & (z < z2)
-    n_z[mask2] = 1.0
-
-    # Region 3: ramp2 (1 → n_max)
-    mask3 = (z >= z2) & (z < z3)
-    n_z[mask3] = 1.0 + (n_max - 1.0) * (z[mask3] - z2) / ramp2_length
-
-    # Region 4: final flat (n_max)
-    mask4 = (z >= z3) & (z < z4)
-    n_z[mask4] = n_max
-
-    # Region 5: z >= z4 → stays zero
-
-    # ----- Radial profile -----
-    n_r = 1.0 - (r / R_cap) ** 2
-    n_r = np.clip(n_r, 0.0, 1.0)
-
-    return n_z * n_r
-    
-# Select plasma density function
-if plasma_type == 'gas_jet':
-    dens_func = gasjet_dens_ramp
-elif plasma_type == 'gas_jet_parabolic':
-    dens_func = capillary_dens_ramp_parabolic
-elif plasma_type == 'gas_jet_parabolic_radiator':
-    dens_func = capillary_dens_ramp_parabolic_radiator
-elif plasma_type == 'capillary':
-    dens_func = capillary_dens_ramp_parabolic
-    #dens_func = capillary_dens_ramp_Gaussian
-elif plasma_type == 'capillary_2stage':
-    dens_func = capillary_dens_two_stage
 # ============================================================
 #                     LASER DRIVER
 # ============================================================
-if plasma_type in ['gas_jet', 'gas_jet_parabolic', 'gas_jet_parabolic_radiator']:
-    a0 = 3.          # Laser amplitude
-    w0 = 20.e-6 #10.e-6       # Laser waist ~ matched spot size
-    tau = 20.e-15     # Laser duration < lambdap
-    z0 = -5.e-6      # Laser centroid
-    z_foc = 20.e-6   # Focal position
-    lambda0 = 0.8e-6 # laser wavelength 
-elif plasma_type in ['capillary', 'capillary-2stage']:
-    a0 = 2.          # Laser amplitude
-    w0 = 20.e-6       # Laser waist ~ matched spot size
-    tau = 20.e-15     # Laser duration < lambdap
-    z0 = -5.e-6      # Laser centroid
-    z_foc = 20.e-6   # Focal position
-    lambda0 = 0.8e-6 # laser wavelength 
-    
-Laser_intensity = (a0 / 0.855 / (lambda0/1e-6) )**2 * 1e18 # [W/cm2]
-Laser_intensity_Wm2 = Laser_intensity * 1e4
-Laser_power = (pi * w0**2 / 2.) * Laser_intensity_Wm2 # equation for a gaussian beam
-Laser_energy = Laser_power * tau
-Laser_Rayleigh_length = pi * w0**2 / lambda0  # [um]
+lambda0 = 0.8e-6   # m
+tau     = 23.e-15  # s
+w0      = 90.e-6   # m
+El      = 2.17     # J
+
+P0 = 0.94 * El / tau                         # W
+I0_Wm2 = 2 * P0 / (pi * w0**2)              # W/m^2
+I0_Wcm2 = I0_Wm2 * 1e-4                     # W/cm^2
+
+a0 = 0.855 * (lambda0 * 1e6) * np.sqrt(I0_Wcm2 / 1e18)
+
+z0 = -20.e-6
+z_foc = 0.e-6
+
+Laser_intensity = I0_Wcm2                   # W/cm^2
+Laser_power = P0                            # W
+Laser_energy = El                           # J
+Laser_Rayleigh_length = pi * w0**2 / lambda0  # m
 
 # ============================================================
 #                     MOVING WINDOW SETTINGS
@@ -612,7 +223,6 @@ smoother = BinomialSmoother(
 #skin_depth_N = c / wp_N
 
 print("//////////////////////////////////////////////////////////")
-print('Plasma type is ', plasma_type)
 print(f"dz = {dz:.2e} m")
 print(f"dr = {dr:.2e} m")
 #print(f"lambda_p (He) = {lambda_p_He:.2e} m")
@@ -629,6 +239,7 @@ print(f"Laser intensity = {Laser_intensity:.2e} W/cm2")
 print(f"Laser power     = {Laser_power/1e12:.2f} TW")
 print(f"Laser energy    = {Laser_energy:.2e} J")
 print(f"Laser Rayleigh length = {Laser_Rayleigh_length/1e-6:.2f} um")
+print(f"a0     = {a0:.2f}")
 print("//////////////////////////////////////////////////////////")
 
 # ################################################################
@@ -719,48 +330,22 @@ if __name__ == "__main__":               # Standard Python entry point guard
 
     # Helium is already ionized once (He → He⁺)
     # Each helium ion contributes 1 free electron (already accounted for later)
-    atoms_He = sim.add_new_species(
-        q=e,              # charge = +1e → He⁺
-        m=4.*m_p,         # mass = 4 proton masses (helium nucleus)
-        n=n_He,           # number density
-        dens_func=dens_func,
-        p_nz=p_nz_He, p_nr=p_nr, p_nt=p_nt,
-        p_zmin=p_zmin
+    atoms_H = sim.add_new_species(
+        q = e,                # charge = +1e → H⁺ (proton)
+        m = 1.0 * m_p,        # hydrogen ion mass = proton mass
+        n = n0,               # number density
+        dens_func = dens_func,
+        p_nz = p_nz_H,       # you can reuse same macro-particle numbers
+        p_nr = p_nr,
+        p_nt = p_nt,
+        p_zmin = p_zmin
     )
     
-    atoms_N = sim.add_new_species(
-        q=5*e,              # charge = +5e → N⁵⁺
-        m=14.*m_p,          # nitrogen ion mass (≈14 atomic mass units)
-        n=n_N,              # nitrogen density
-        dens_func=dens_func,# spatial density profile
-        p_nz=p_nz_N,          # number of macroparticles in z
-        p_nr=p_nr,          # number of macroparticles in r
-        p_nt=p_nt,          # number of macroparticles in theta
-        p_zmin=p_zmin       # minimum z position for initialization
-    )
-
     # Background electrons from pre-ionization
     # Important: the electron density from N5+ is 5x larger than that from He+
-    n_e = n_He + 5*n_N
+    n_e = n0
     elec = sim.add_new_species( q=-e, m=m_e, n=n_e,
         dens_func=dens_func, p_nz=p_nz_ele, p_nr=p_nr, p_nt=p_nt, p_zmin=p_zmin )
-
-    # Activate ionization of He ions (for levels above 1 - He+→He2+ + e−).
-    atoms_He.make_ionizable(
-        'He',                # element name (helium)
-        target_species=elec, # Store the created electrons in the species `elec`
-        level_start=1        # initial state (neutral He)
-    )
-
-    # Activate ionization of N ions (for levels above 5).
-    # Store the created electrons in a new dedicated electron species that
-    # does not contain any macroparticles initially
-    elec_from_N = sim.add_new_species( q=-e, m=m_e ) # 👉 Nitrogen is used for ionization injection (the beam you care about)
-    atoms_N.make_ionizable( 
-        'N', 
-        target_species=elec_from_N, 
-        level_start=5 
-    )
 
     # --------------------------------------
     # Add laser pulse
@@ -772,13 +357,18 @@ if __name__ == "__main__":               # Standard Python entry point guard
     add_laser_pulse( sim, laser_profile)    
 
     # --------------------------------------
+    # Add driver beam
+    # --------------------------------------
+    witness=add_witness(sim)
+    
+    # --------------------------------------
     # Synchrotron
     # --------------------------------------
     if use_synchrotron:
         synchrotron(
             sim=sim,
-            species=elec_from_N,
-            dic_species={"trapped_elec": elec_from_N},
+            species=witness,
+            dic_species={"witness": witness},
             diag_period=diag_period
         )
 
@@ -815,10 +405,10 @@ if __name__ == "__main__":               # Standard Python entry point guard
     d = field_diags(sim, diag_period)
     sim.diags.append(d)
 
-    d = particle_diags(sim, diag_period, species={"trapped_elec": elec_from_N, "plasma_elec": elec})
+    d = particle_diags(sim, diag_period, species={"witness": witness})
     sim.diags.append(d)
 
-    d = particle_charge_density_diags(sim, diag_period, species_dict={"trapped_elec": elec_from_N, "plasma_elec": elec})
+    d = particle_charge_density_diags(sim, diag_period, species_dict={"witness": witness})
     sim.diags.append(d)
 
     # --------------------------------------
