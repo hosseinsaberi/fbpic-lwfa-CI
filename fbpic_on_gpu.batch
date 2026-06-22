@@ -1,0 +1,98 @@
+#!/bin/bash
+###############################################################################
+# SLURM JOB SETTINGS
+#------------------------------------------------------------------------------
+
+#SBATCH --job-name=fbpic_gpu                 # Job name shown by squeue
+#SBATCH --output=output_%j.out               # STDOUT (%j = job ID)
+#SBATCH --error=error_%j.err                 # STDERR
+
+# Choose the GPU partition you tested interactively
+##SBATCH --partition=gpuA                      # e.g., gpuA (working test)
+#SBATCH --partition=gpuL                    # Switch when moving to gpuL
+
+#SBATCH --nodes=1                             # 1 node only
+#SBATCH --ntasks=1                            # 1 MPI rank
+#SBATCH --cpus-per-task=12                    # CPU cores for this task
+#SBATCH --gpus=1                              # Single GPU
+##SBATCH --time=12:00:00                       # Wall time limit
+#SBATCH --time=3-0                       # Wall time limit
+
+###############################################################################
+# BASH SAFETY OPTIONS
+#------------------------------------------------------------------------------
+# -e: Exit on error
+# -u: Treat undefined variables as errors
+# -o pipefail: Pipelines fail if any command fails
+###############################################################################
+
+#set -euo pipefail
+
+###############################################################################
+# ENVIRONMENT SETUP
+#------------------------------------------------------------------------------
+# Load modules and enable conda in non-interactive mode
+###############################################################################
+
+module purge
+module load apps/binapps/jupyter-notebook/any    # loads Anaconda3 2024.10 by default
+
+# Properly initialise conda in non-interactive shells
+#eval "$(conda shell.bash hook)"
+source activate fbpic_gpu     # Change to your exact environment name
+
+# Avoid user packages or custom Pythonpaths interfering with the job
+#export PYTHONNOUSERSITE=1
+#unset PYTHONPATH || true
+
+###############################################################################
+# DEBUG INFORMATION (HIGHLY USEFUL FOR GPU JOBS)
+#------------------------------------------------------------------------------
+
+echo "==== Job started at $(date) ===="
+echo "Node: $HOSTNAME"
+echo "Conda env: ${CONDA_DEFAULT_ENV:-<none>}"
+echo "Python path: $(which python)"
+echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-<unset>}"
+echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH:-<empty>}"
+
+# Show GPU status (non-fatal if something is wrong)
+nvidia-smi || true
+
+###############################################################################
+# MOVE TO SUBMISSION DIRECTORY
+###############################################################################
+
+cd "$SLURM_SUBMIT_DIR"
+
+###############################################################################
+# PYTHON SANITY CHECKS
+#------------------------------------------------------------------------------
+# Confirms that the environment, mpi4py, and site-packages behave as expected.
+###############################################################################
+
+python - <<'PY'
+import sys, os, site
+print("sys.executable:", sys.executable)
+print("user site:", site.getusersitepackages())
+
+try:
+    import mpi4py
+    print("mpi4py from:", mpi4py.__file__)
+except Exception as e:
+    print("mpi4py import ERROR:", e)
+PY
+
+###############################################################################
+# TEST IMPORTS THROUGH SLURM (IMPORTANT FOR MPI JOBS)
+###############################################################################
+
+#srun -n 1 python -c "import mpi4py, fbpic; print('mpi4py OK'); print('fbpic OK')"
+
+###############################################################################
+# RUN YOUR FULL SIMULATION
+###############################################################################
+
+python main_fbpic.py
+
+echo "==== Job finished at $(date) ===="

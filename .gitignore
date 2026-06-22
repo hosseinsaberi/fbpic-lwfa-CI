@@ -1,0 +1,6 @@
+.ipynb_checkpoints/
+diags*/
+__pycache__/
+*.err
+*.out
+
