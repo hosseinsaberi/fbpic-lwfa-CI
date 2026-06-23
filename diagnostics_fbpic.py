@@ -19,8 +19,8 @@ from fbpic.openpmd_diag import ParticleChargeDensityDiagnostic
 def field_diags(sim, diag_period):
     diag_field = FieldDiagnostic(
         period     = diag_period,   # how often to write field data
-    fldobject  = sim.fld,       # field solver’s field container
-    comm       = sim.comm       # MPI communicator (handles guard-cell removal)
+        fldobject  = sim.fld,       # field solver’s field container
+        comm       = sim.comm       # MPI communicator (handles guard-cell removal)
     )
     
     return diag_field
@@ -47,9 +47,10 @@ def field_diags(sim, diag_period):
 # the field diagnostics (unless write_dir is overridden).
 def particle_diags(sim, diag_period, species):
     diag_particle = ParticleDiagnostic(
-        period  = diag_period,          # how often to save particle data
-        species = species,  # which particle species to dump
-        comm    = sim.comm              # MPI communicator for parallel runs
+    period  = diag_period,          # how often to save particle data
+    species = species,  # which particle species to dump
+    comm    = sim.comm              # MPI communicator for parallel runs
+  #  write_id = True   # ✅ THIS IS THE KEY LINE
     )
 
     return diag_particle

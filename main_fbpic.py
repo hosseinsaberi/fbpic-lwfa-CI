@@ -3,15 +3,17 @@
 FBPIC Simulation Script
 ===============================================================
 Purpose:
-    LWFA simulation for hard X-ray generation
-        - Ramped uniform plasma => NEXT: HOFI Channel
+    PWFA simulation with CLARA beam parameters
+        - Uniform plasma
+        - Electron driver beam
         - Synchrotron radiation & diagnostics enabled
-        - Lab frame => NEXT: Boosted beam frame
+        - Lab frame
         - Moving window
         - Quasi‑cylindrical (m = 0,1,...)
 
 Dates: 
-    1st version: 05/05/2026
+    1st version: 26/02/2026
+    2nd version: 06/03/2026 ... update to check and benchmark
 ===============================================================
 """
 
@@ -19,22 +21,15 @@ Dates:
 # Imports
 # ------------------------------------------------------------
 import numpy as np
-from scipy.constants import c, e, m_e, epsilon_0, pi, m_p
+from scipy.constants import c, e, m_e, epsilon_0, pi
 
-# Import the relevant structures in FBPIC
-# #######################################
 # FBPIC core
 from fbpic.main import Simulation 
 
-# Add a laser pulse to simulation
-from fbpic.lpa_utils.laser import add_laser_pulse
-
-# Define Gaussian laser profile
-from fbpic.lpa_utils.laser.laser_profiles import GaussianLaser
-
+# Electron beam utilities
+from fbpic.lpa_utils.bunch import add_particle_bunch_gaussian
 
 # Smoothing filter
-# Class that applies a binomial smoothing filter to electromagnetic fields on the grid
 from fbpic.fields.smoothing import BinomialSmoother
 
 # Import the utility that fixes all random number generators (Python, NumPy, FBPIC).
@@ -44,13 +39,10 @@ from fbpic.fields.smoothing import BinomialSmoother
 from fbpic.utils.random_seed import set_random_seed
 set_random_seed(42)     # The value 42 is arbitrary (a traditional default); any integer would work.
 
-# Import MY custom diagnostic modules
-# ###################################
-from fbpic.openpmd_diag import FieldDiagnostic, ParticleDiagnostic, ParticleChargeDensityDiagnostic, \
-     set_periodic_checkpoint, restart_from_checkpoint
+# Import custom diagnostic modules (code for setting up field and particle diagnostics)
 from diagnostics_fbpic import field_diags, particle_diags, particle_charge_density_diags
 from synchrotron_fbpic import synchrotron
-from beam_fbpic import add_witness
+from beam_fbpic import add_driver
 
 # ============================================================
 #                 SIMULATION GLOBAL SETTINGS
@@ -68,14 +60,17 @@ use_synchrotron = True # Enable synchrotron radiation module
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
 # Longitudinal box (z in metres)
-Nz   = 2000                                             # Number of grid points along z (longitudinal direction)
-zmin = -140.0e-6                                        # Left boundary of the box in z (meters)
-zmax = 20.0e-6                                         # Right boundary of the box in z (meters)
-dz = (zmax - zmin) / Nz                                # Cell size; dz should resolve laser/plasma 
+Nz   = 400                                             # Number of grid points along z (longitudinal direction)
+zmin = -250e-6                                         # Left boundary of the box in z (meters)
+zmax = 0.0                                             # Right boundary of the box in z (meters)
+dz = (zmax - zmin) / Nz                                # Cell size
 
 # Radial box (r)
-Nr   = 200                                             # Number of grid points along r (radial direction) - 20–40 cells across rb
-rmax = 300e-6 #20.0e-6                                           # Radial box size (meters): 0 <= r <= rmax
+#Nr   = 100                                             # Number of grid points along r (radial direction)
+Nr = 512   						# gives dr ≈ 0.78 µm (similar to before)
+#rmax = 75e-6                                           # Radial box size (meters): 0 <= r <= rmax
+rmax = 400e-6    					# 400 µm  (safe, stable)
+
 dr = rmax / Nr                                         # Cell size
 
 # Azimuthal modes (quasi‑cylindrical)
@@ -88,94 +83,24 @@ dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz �
 # ============================================================
 #                   BACKGROUND PLASMA SETUP
 # ============================================================
-p_zmin = 0.0e-6                                       # Start position of plasma region (meters)
-#p_zmax = 500.0e-6                                    # End position of plasma region (meters) ✅ If not defined, Plasma has no hard cutoff
-#p_rmax = 18e-6	                                     # Radial extent of plasma (meters) ✅ If not defined, Plasma fills the entire radial domain
+p_zmin = 0.0                                           # Start position of plasma region (meters)
+p_zmax = 1                                             # End position of plasma region (meters)
+#p_rmax = 70e-6	                                     # Radial extent of plasma (meters)
+p_rmax = 380e-6   				# plasma radius inside the safe region
+
+# Background plasma density (m^-3)
+n_e = 2e16 * 1e6  
 
 # Macro-particle sampling per cell along z, r and theta
-p_nz_H = 2     	 # or 8#
-p_nz_ele = p_nz_H     	 # as He is main plasma
-p_nr = 2      	 # or 8
-p_nt = 4     	 # optional: 8–16 for smoother plasma noise
+p_nz = 4     	 # or 8
+p_nr = 4      	 # or 8
+p_nt = 8     	 # optional: 8–16 for smoother plasma noise
 		 # p_nt ≥ 4 × Nm for proper mode resolution.
 
-# ###################
-# Plasma density ramp
-# ###################
-# Background plasma density (m^-3)
-# Peak density (convert cm^-3 → m^-3)
-n0 = 1e17 * 1e6   # m^-3
-    
-# Simulation window is initiated outside of the plasma
-# Positions (in meters)
-z_start  = 0.0
-z_ramp_up_end   = 1.0e-3
-z_plateau_end   = 6.0e-3
-z_ramp_down_end = 7.0e-3
-
-# Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
-L_interact = z_ramp_down_end                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
-L_dump     = 0.1e-3                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
-
-# ============================================================
-#                     PLASMA DENSITY FUNC
-# ============================================================
 def dens_func(z, r):
-    """
-    Plasma density profile (m^-3) for:
-    - 1 mm up-ramp
-    - 5 mm plateau
-    - 1 mm down-ramp
-    Smooth sin^2 ramps
-    """
+    """Uniform plasma density profile."""
+    return np.ones_like(z)
 
-    # Initialize density
-    n = np.zeros_like(z)
-
-    # ----------------------
-    # Up ramp (0 → 1 mm)
-    # ----------------------
-    mask_up = (z >= z_start) & (z < z_ramp_up_end)
-    xi = (z[mask_up] - z_start) / (z_ramp_up_end - z_start)
-    n[mask_up] = n0 * np.sin(0.5 * np.pi * xi)**2
-
-    # ----------------------
-    # Plateau (1 → 6 mm)
-    # ----------------------
-    mask_plateau = (z >= z_ramp_up_end) & (z < z_plateau_end)
-    n[mask_plateau] = n0
-
-    # ----------------------
-    # Down ramp (6 → 7 mm)
-    # ----------------------
-    mask_down = (z >= z_plateau_end) & (z < z_ramp_down_end)
-    xi = (z[mask_down] - z_plateau_end) / (z_ramp_down_end - z_plateau_end)
-    n[mask_down] = n0 * np.cos(0.5 * np.pi * xi)**2
-
-    return n
-
-
-# ============================================================
-#                     LASER DRIVER
-# ============================================================
-lambda0 = 0.8e-6   # m
-tau     = 23.e-15  # s
-w0      = 90.e-6   # m
-El      = 2.17     # J
-
-P0 = 0.94 * El / tau                         # W
-I0_Wm2 = 2 * P0 / (pi * w0**2)              # W/m^2
-I0_Wcm2 = I0_Wm2 * 1e-4                     # W/cm^2
-
-a0 = 0.855 * (lambda0 * 1e6) * np.sqrt(I0_Wcm2 / 1e18)
-
-z0 = -20.e-6
-z_foc = 0.e-6
-
-Laser_intensity = I0_Wcm2                   # W/cm^2
-Laser_power = P0                            # W
-Laser_energy = El                           # J
-Laser_Rayleigh_length = pi * w0**2 / lambda0  # m
 
 # ============================================================
 #                     MOVING WINDOW SETTINGS
@@ -186,24 +111,21 @@ v_window = c                                        # window moving at speed of 
 # ============================================================
 #                       SIMULATION RUNTIME
 # ============================================================
-T_interact = (L_interact + (zmax - zmin)) / v_window # Compute time for moving window to traverse plasma + its own length
-                                                     # (assumes window starts before entering the plasma region)
+L_interact = 20.1e-2                                   # Physical interaction length to simulate (meters)
+L_dump     = 1e-3                                 # Desired spatial diagnostic interval along propagation (meters)
+                                                    # General rule: 50–200 dumps is ideal
+T_interact = (L_interact + (zmax - zmin)) / v_window
+
 
 # ============================================================
 #                          DIAGNOSTICS
 # ============================================================
 diag_period = int(L_dump / dz)             # Write diagnostics every N time steps
                                            # General rule: 50–200 dumps is ideal
-save_checkpoints = False # Whether to write checkpoint files
-checkpoint_period = 100  # Period for writing the checkpoints
-use_restart = False      # Whether to restart from a previous checkpoint
-track_electrons = False  # Whether to track and write particle ids
 
 # ============================================================
 #                            SMOOTHER
 # ============================================================
-# Apply binomial smoothing to fields (more passes in r than z) to reduce numerical noise,
-# with compensators to preserve low-frequency physical content
 smoother = BinomialSmoother(
     n_passes={'z': 3, 'r': 6},
     compensator={'z': True, 'r': True}
@@ -214,32 +136,21 @@ smoother = BinomialSmoother(
 #                            USER DATA TO PRINT
 # ============================================================
 # Calculate plasma frequency and plasma wavelength
-#wp_He = np.sqrt(n_He * e**2 / epsilon_0 / m_e)
-#lambda_p_He = 2 * pi * c / wp_He
-#skin_depth_He = c / wp_He
-
-#wp_N = np.sqrt(n_N * e**2 / epsilon_0 / m_e)
-#lambda_p_N = 2 * pi * c / wp_N
-#skin_depth_N = c / wp_N
+wp = np.sqrt(n_e * e**2 / epsilon_0 / m_e)
+lambda_p = 2 * pi * c / wp
+skin_depth = c / wp
 
 print("//////////////////////////////////////////////////////////")
 print(f"dz = {dz:.2e} m")
 print(f"dr = {dr:.2e} m")
-#print(f"lambda_p (He) = {lambda_p_He:.2e} m")
-#print(f"lambda_p (N) = {lambda_p_N:.2e} m")
-#print(f"skin depth (He) = {skin_depth_He:.2e} m")
-#print(f"cell per wavelength (lamdap/dz) = {int(lambda_p / dz)}")
-#print("====>>> for PWFA you need ≥ 30–60 cells per lambda (excellent)")
-#print(f"skin_depdth/dr) = {int(skin_depth / dr)}")
-#print("====>>> 20–40 cells per skin depth is typical\n")
+print(f"lambda_p = {lambda_p:.2e} m")
+print(f"skin depth = {skin_depth:.2e} m")
+print(f"cell per wavelength (lamdap/dz) = {int(lambda_p / dz)}")
+print("====>>> for PWFA you need ≥ 30–60 cells per lambda (excellent)")
+print(f"skin_depdth/dr) = {int(skin_depth / dr)}")
+print("====>>> 20–40 cells per skin depth is typical\n")
 print("diag_period =", diag_period)
 print("diag_length =", L_dump, 'm')
-print("\n\nLASER PARAMETERS")
-print(f"Laser intensity = {Laser_intensity:.2e} W/cm2")
-print(f"Laser power     = {Laser_power/1e12:.2f} TW")
-print(f"Laser energy    = {Laser_energy:.2e} J")
-print(f"Laser Rayleigh length = {Laser_Rayleigh_length/1e-6:.2f} um")
-print(f"a0     = {a0:.2f}")
 print("//////////////////////////////////////////////////////////")
 
 # ################################################################
@@ -256,28 +167,27 @@ if __name__ == "__main__":               # Standard Python entry point guard
     	# Spatial domain configuration
     	# --------------------------------------------------------
     	Nz, zmax,                     # (int, float) Number of grid cells in z; box size in z (edge of last cell)
-    	Nr, rmax,                     # (int, float) Number of grid cells in r; box size in r (edge of last cell)
-    	Nm,                           # (int) Number of azimuthal modes (m=0...Nm-1)
-    	dt,                           # (float) Time step of the PIC solver
-    	zmin=zmin,                    # (float) Position of lower z‑edge of the simulation box (edge of first cell)
+	Nr, rmax,                     # (int, float) Number of grid cells in r; box size in r (edge of last cell)
+	Nm,                           # (int) Number of azimuthal modes (m=0...Nm-1)
+	dt,                           # (float) Time step of the PIC solver
+	zmin=zmin,                    # (float) Position of lower z‑edge of the simulation box (edge of first cell)
 		
-    	# Maxwell solver configuration
-    	# --------------------------------------------------------
-    	n_order=n_order,              # (int) Order of finite‑order PSATD stencil; -1 = infinite order
+	# Maxwell solver configuration
+	# --------------------------------------------------------
+	n_order=n_order,              # (int) Order of finite‑order PSATD stencil; -1 = infinite order
                                       # High n_order → better dispersion but more MPI communication
        
         # Plasma shortcut initialization (disabled unless n_e provided)
-        # If disbaled means no pre plasma but gas ionization
     	# --------------------------------------------------------
-#    	p_zmin=p_zmin,               # (float) Minimal z for plasma loading if using built‑in plasma creation
-#    	p_zmax=p_zmax,               # (float) Max z for plasma loading
-#    	p_rmin=0.0,                  # (float) Minimal r for plasma loading
-#   	p_rmax=p_rmax,         	     # (float) Max r for plasma loading
-#    	p_nz=p_nz,                   # (int) Number of macro‑particles per cell along z (only if n_e used)
-#    	p_nr=p_nr,                   # (int) Number of macro‑particles per cell along r
-#    	p_nt=p_nt,                   # (int) Number of macro‑particles per θ
-#    	n_e=n_e,                     # (float or None) Plasma density (if provided, auto‑creates electrons, if not NO plasma is automatically created) 
-#   	dens_func=dens_func,         # (callable or None) Density function for plasma loading
+    	p_zmin=p_zmin,               # (float) Minimal z for plasma loading if using built‑in plasma creation
+    	p_zmax=p_zmax,               # (float) Max z for plasma loading
+    	p_rmin=0.0,                  # (float) Minimal r for plasma loading
+    	p_rmax=p_rmax,         	     # (float) Max r for plasma loading
+    	p_nz=p_nz,                   # (int) Number of macro‑particles per cell along z (only if n_e used)
+    	p_nr=p_nr,                   # (int) Number of macro‑particles per cell along r
+    	p_nt=p_nt,                   # (int) Number of macro‑particles per θ
+    	n_e=n_e,                     # (float or None) Plasma density (if provided, auto‑creates electrons)
+    	dens_func=dens_func,         # (callable or None) Density function for plasma loading
 
     	# Current / smoothing / numerical stability
     	# --------------------------------------------------------
@@ -286,12 +196,12 @@ if __name__ == "__main__":               # Standard Python entry point guard
 
     	# Galilean / comoving PSATD solver
     	# --------------------------------------------------------
-    	v_comoving=0.99999 * c,      # (float or None) Speed of comoving frame; None = standard PSATD
+    	v_comoving=0.99999 * c,             # (float or None) Speed of comoving frame; None = standard PSATD
     	use_galilean=True,           # (bool) Whether to use Galilean PSATD scheme when v_comoving is set
 
     	# Particles: initialization & deposition
     	# --------------------------------------------------------
-#    	initialize_ions=False,       # (bool) Auto‑create ions (H+) along with electrons if n_e set
+    	initialize_ions=False,       # (bool) Auto‑create ions (H+) along with electrons if n_e set
     	particle_shape='cubic',      # (str) Particle shape: 'linear' (=1st order) or 'cubic' (=3rd order)
     	use_ruyten_shapes=True,      # (bool) Use Ruyten shapes for better near-axis charge deposition
     	use_modified_volume=True,    # (bool) Modified cell volume near axis for correct spectral solver behavior
@@ -304,9 +214,9 @@ if __name__ == "__main__":               # Standard Python entry point guard
 
     	# Boundary conditions + damping
     	# --------------------------------------------------------
-    	boundaries={'z': 'open', 'r': 'reflective'},
-                                     # 'z': 'periodic' or 'open' (open = absorbing PML)
-                                     # 'r': 'reflective' or 'open' (open = radial PML, more expensive)
+    	boundaries={'z': 'open', 'r': 'open'},
+                                 # 'z': 'periodic' or 'open' (open = absorbing PML)
+                                 # 'r': 'reflective' or 'open' (open = radial PML, more expensive)
     	n_guard=None,                # (int or None) Number of guard cells (auto = 2*n_order, or 64 if infinite order)
     	n_damp={'z': 64, 'r': 32},   # (dict) Number of damping cells for absorbing layers in z and r
 
@@ -323,92 +233,113 @@ if __name__ == "__main__":               # Standard Python entry point guard
     # --------------------------------------
     # Insert Background Plasma Electrons
     # --------------------------------------
-    # (1) Adding pre-ionized ion species
-    # Add the Helium ions (pre-ionized up to level 1),
-    # the Nitrogen ions (pre-ionized up to level 5)
-    # and the associated electrons (from the pre-ionized levels)
+    elec = sim.add_new_species(
+    	q = -e,                             # (float, Coulombs)
+    	                                    # Charge of the species. Electrons → q = -e.    	                                    
+    	m = m_e,                            # (float, kg)
+    	                                    # Mass of the species. Electrons → m = m_e.
+	
+	# Macroparticle creation (density & profile)
+	# --------------------------------------------------------
+	n = n_e,                            # (float or None)
+                                            # Physical density (particles/m³). If None → NO particles created.
+                                            # If set → evenly spaced macroparticles are generated inside the region.
 
-    # Helium is already ionized once (He → He⁺)
-    # Each helium ion contributes 1 free electron (already accounted for later)
-    atoms_H = sim.add_new_species(
-        q = e,                # charge = +1e → H⁺ (proton)
-        m = 1.0 * m_p,        # hydrogen ion mass = proton mass
-        n = n0,               # number density
-        dens_func = dens_func,
-        p_nz = p_nz_H,       # you can reuse same macro-particle numbers
-        p_nr = p_nr,
-        p_nt = p_nt,
-        p_zmin = p_zmin
+    	dens_func = dens_func,              # (callable or None)
+                                            # Function returning density *relative to n* (values 0..1).
+                                            # Can be dens_func(z,r) or dens(x,y,z).
+                                            # For boosted-frame: see boost_positions_in_dens_func.
+
+	# Sampling resolution (particles per cell)
+    	# --------------------------------------------------------
+    	p_nz = p_nz,                        # (int or None)
+                                            # Number of macroparticles per cell in z.
+                                            # Must be set (along with n) to trigger macroparticle initialization.
+
+    	p_nr = p_nr,                        # (int or None)
+                                            # Number of macroparticles per cell in r.
+
+    	p_nt = p_nt,                        # (int or None)
+                                            # Number of macroparticles in theta.
+                                            # Recommendation: p_nt ≥ 4*Nm   (unless Nm = 1 → p_nt = 1). 
+                                            # Ensures proper angular resolution in quasi-3D. [1](https://github.com/fbpic/fbpic/blob/dev/fbpic/main.py)
+
+    	# Spatial region for initialization (LAB frame)
+    	# --------------------------------------------------------
+    	p_zmin = p_zmin,                    # (float, meters)
+                                            # Minimal z above which particles are initialized.
+                                            # Default: box lower z-edge.
+
+    	p_zmax = p_zmax,                    # (float, meters)
+                                            # Maximal z below which particles are initialized.
+                                            # Default: box upper z-edge.
+
+    	p_rmin = 0.0,                       # (float, meters)
+                                            # Minimal r above which particles are initialized.
+                                            # Default: 0.
+
+    	p_rmax = p_rmax,                    # (float, meters)
+                                            # Maximal r below which particles are initialized.
+                                            # Default: simulation rmax.
+
+    	# Mean momenta and temperature (for thermal beams)
+    	# --------------------------------------------------------
+    	uz_m = 0.0,                         # (float) Mean normalized momentum <uz>.
+    	ux_m = 0.0,                         # (float) Mean normalized momentum <ux>.
+    	uy_m = 0.0,                         # (float) Mean normalized momentum <uy>.
+
+   	uz_th = 0.0,                        # (float) Thermal spread in uz.
+    	ux_th = 0.0,                        # (float) Thermal spread in ux.
+    	uy_th = 0.0,                        # (float) Thermal spread in uy.
+
+    	# Injection behavior for moving-window simulations
+    	# --------------------------------------------------------
+    	continuous_injection = True,        # (bool)
+                                            # If True: continually inject particles at window edge as it moves.
+                                            # If False: create particles only at initialization.
+                                            
+    	# Boosted-frame handling of dens_func
+    	# --------------------------------------------------------
+    	boost_positions_in_dens_func = False,
+                                        # (bool)
+                                        # In boosted frame: if True → dens_func takes LAB-frame z positions.
+                                        # If False → dens_func must use boosted-frame coordinates.
+
+    	# Tracer species option
+    	# --------------------------------------------------------
+    	is_tracer = False                   # (bool)
+                                        # If True: particles move normally but generate NO current.
+                                        # Useful for passive diagnostics.
+                                        # For plasma electrons: use False (they participate in physics).
     )
-    
-    # Background electrons from pre-ionization
-    # Important: the electron density from N5+ is 5x larger than that from He+
-    n_e = n0
-    elec = sim.add_new_species( q=-e, m=m_e, n=n_e,
-        dens_func=dens_func, p_nz=p_nz_ele, p_nr=p_nr, p_nt=p_nt, p_zmin=p_zmin )
 
-    # --------------------------------------
-    # Add laser pulse
-    # --------------------------------------
-    # Load initial fields
-    # Create a Gaussian laser profile
-    laser_profile = GaussianLaser(a0, w0, tau, z0, zf=z_foc)
-    # Add the laser to the fields of the simulation
-    add_laser_pulse( sim, laser_profile)    
 
     # --------------------------------------
     # Add driver beam
     # --------------------------------------
-    witness=add_witness(sim)
-    
+    driver=add_driver(sim)    
+
     # --------------------------------------
     # Synchrotron
     # --------------------------------------
     if use_synchrotron:
         synchrotron(
             sim=sim,
-            species=witness,
-            dic_species={"witness": witness},
+            species=driver,
+            dic_species={"driver": driver},
             diag_period=diag_period
         )
-
-    # --------------------------------------
-    # Handle simulation start mode:
-    # --------------------------------------
-    # - If starting fresh → optionally enable electron tracking
-    # - If restarting → reload full simulation state from checkpoint
-    if use_restart is False:
-        # Fresh run: enable tracking of electron trajectories if requested
-        if track_electrons:
-            elec.track(sim.comm)
-            elec_from_N.track(sim.comm)
-    else:
-        # Restart run: load fields and particles from the latest saved checkpoint
-        restart_from_checkpoint(sim)
-
     
     # --------------------------------------
     # Diagnostics
     # --------------------------------------
-#    sim.diags = [
-#                FieldDiagnostic( diag_period, sim.fld, comm=sim.comm ),
-#                ParticleDiagnostic( diag_period,
-#                    {"electrons from N": elec_from_N, "electrons": elec},
-#                    comm=sim.comm ),
-                # Since rho from `FieldDiagnostic` is 0 almost everywhere
-                # (neutral plasma), it is useful to see the charge density
-                # of individual particles
-#                ParticleChargeDensityDiagnostic( diag_period, sim,
-#                    {"electrons": elec} )
-#                ]
-
     d = field_diags(sim, diag_period)
     sim.diags.append(d)
 
-    d = particle_diags(sim, diag_period, species={"witness": witness})
+    d = particle_diags(sim, diag_period, species={"driver": driver})
     sim.diags.append(d)
 
-    d = particle_charge_density_diags(sim, diag_period, species_dict={"witness": witness})
+    d = particle_charge_density_diags(sim, diag_period, species_dict={'driver': driver, 'plasma': elec})
     sim.diags.append(d)
 
     # --------------------------------------
@@ -419,13 +350,6 @@ if __name__ == "__main__":               # Standard Python entry point guard
     N_step = int(T_interact / sim.dt)    # Number of time steps to cover the requested interaction time
     print(f"Running simulation for {N_step} iterations…")  # Informative console message
 
-    # --------------------------------------
-    # Add periodic checkpoints
-    # --------------------------------------
-    # Add periodic checkpoints to save simulation state (fields + particles) for restart or recovery
-    if save_checkpoints:
-        set_periodic_checkpoint(sim, checkpoint_period)
-    
     # --------------------------------------
     # Run PIC Loop
     # --------------------------------------

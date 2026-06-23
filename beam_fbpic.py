@@ -10,10 +10,9 @@ q = -e                                               # Particle charge (C): elec
 m = m_e                                              # Particle mass (kg): electron rest mass
 
 # Beam size
-Qb = 5e-12 # C
-sig_r  = 20e-6                                       # Transverse RMS size (meters)
-sig_z  = c*10e-15                                       # Longitudinal RMS size (meters)
-n_emit = 2.6e-6                                        # normalized emittance (m·rad)
+sig_r  = 50e-6                                       # Transverse RMS size (meters)
+sig_z  = 15e-6                                       # Longitudinal RMS size (meters)
+n_emit = 2e-6                                        # normalized emittance (m·rad)
 
 # Beam energy
 Eb = 250                                             # Beam energy [MeV]
@@ -29,23 +28,20 @@ sig_gamma = dE_E * gamma0                             # RMS energy spread expres
 # FBPIC computes the weight of each macroparticle as w=n_real/n_macro (which is electrons per macroparticle)
 # ★ Increase beam macroparticles (reduces statistical noise)
 # Noise ∝ 1 / √(N_macro) ... ensure to be arounce ~0.2% or less
-n_real  = Qb/(-q)                                        # Number of physical electrons represented (for charge weighting)
+n_real  = 9.4e8                                        # Number of physical electrons represented (for charge weighting)
 #n_macro = int(2e5)     # 200k   (good)               # Number of macroparticles to sample the beam distribution
 n_macro = int(1e6)     # 500k   (very smooth spectra)
 
 # Beam focus (Where and when the beam reaches its smallest transverse radius.)
-# λp≈106 μm ==> The ideal injection position is: zinj≈(0.25–0.5)λp behind the laser peak
-# here zinj≈25–50 μm behind laser
-# laser is at -20 um
-zf = -50e-6                                          # Target longitudinal focus position of the beam (meters)
-tf = 0.0 #(1e-3 - zf) / c #0.0    focus at plasma entrance 1mm                                        # Time at which the beam is focused at zf (seconds)
+zf = -60e-6                                          # Target longitudinal focus position of the beam (meters)
+tf = 0.0                                             # Time at which the beam is focused at zf (seconds)
 
 # =========================================================
 # Add driver beam (Gaussian-distributed relativistic bunch)
 # =========================================================
 
-def add_witness(sim):
-	witness = add_particle_bunch_gaussian(
+def add_driver(sim):
+	driver = add_particle_bunch_gaussian(
 	    sim=sim,                             # (Simulation) Target FBPIC Simulation object
 
 	    # --- Required species properties ---
@@ -84,4 +80,4 @@ def add_witness(sim):
     						 # Use symmetrize=True for clean, noise‑free, on‑axis beams
     						 # Set symmetrize=False for realistic beams or instability studies
 	)
-	return witness
+	return driver
