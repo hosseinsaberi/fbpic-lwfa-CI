@@ -3,17 +3,17 @@
 FBPIC Simulation Script
 ===============================================================
 Purpose:
-    PWFA simulation with CLARA beam parameters
-        - Uniform plasma
-        - Electron driver beam
+    LWFA simulation with CLARA beam parameters
+        - Uniform plasma - upramp and downramp
+        - Laser driver
+        - External injection
         - Synchrotron radiation & diagnostics enabled
         - Lab frame
         - Moving window
         - Quasi‑cylindrical (m = 0,1,...)
 
 Dates: 
-    1st version: 26/02/2026
-    2nd version: 06/03/2026 ... update to check and benchmark
+    1st version: 24/06/2026
 ===============================================================
 """
 
@@ -21,7 +21,7 @@ Dates:
 # Imports
 # ------------------------------------------------------------
 import numpy as np
-from scipy.constants import c, e, m_e, epsilon_0, pi
+from scipy.constants import c, e, m_e, epsilon_0, pi, m_p
 
 # FBPIC core
 from fbpic.main import Simulation 
@@ -42,7 +42,7 @@ set_random_seed(42)     # The value 42 is arbitrary (a traditional default); any
 # Import custom diagnostic modules (code for setting up field and particle diagnostics)
 from diagnostics_fbpic import field_diags, particle_diags, particle_charge_density_diags
 from synchrotron_fbpic import synchrotron
-from beam_fbpic import add_driver
+from beam_fbpic import add_external_witness
 
 # ============================================================
 #                 SIMULATION GLOBAL SETTINGS
@@ -60,16 +60,16 @@ use_synchrotron = True # Enable synchrotron radiation module
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
 # Longitudinal box (z in metres)
-Nz   = 400                                             # Number of grid points along z (longitudinal direction)
-zmin = -250e-6                                         # Left boundary of the box in z (meters)
-zmax = 0.0                                             # Right boundary of the box in z (meters)
+Nz   = 2000                                             # Number of grid points along z (longitudinal direction)
+zmin = -140e-6                                         # Left boundary of the box in z (meters)
+zmax = 20.0e-6                                             # Right boundary of the box in z (meters)
 dz = (zmax - zmin) / Nz                                # Cell size
 
 # Radial box (r)
 #Nr   = 100                                             # Number of grid points along r (radial direction)
-Nr = 512   						# gives dr ≈ 0.78 µm (similar to before)
+Nr = 200   						# gives dr ≈ 0.78 µm (similar to before)
 #rmax = 75e-6                                           # Radial box size (meters): 0 <= r <= rmax
-rmax = 400e-6    					# 400 µm  (safe, stable)
+rmax = 300e-6    					# 400 µm  (safe, stable)
 
 dr = rmax / Nr                                         # Cell size
 
@@ -84,23 +84,72 @@ dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz �
 #                   BACKGROUND PLASMA SETUP
 # ============================================================
 p_zmin = 0.0                                           # Start position of plasma region (meters)
-p_zmax = 1                                             # End position of plasma region (meters)
+#p_zmax = 1                                             # End position of plasma region (meters)
 #p_rmax = 70e-6	                                     # Radial extent of plasma (meters)
-p_rmax = 380e-6   				# plasma radius inside the safe region
+#p_rmax = 380e-6   				# plasma radius inside the safe region
 
 # Background plasma density (m^-3)
-n_e = 2e16 * 1e6  
+n0 = 1e17 * 1e6  
 
 # Macro-particle sampling per cell along z, r and theta
-p_nz = 4     	 # or 8
-p_nr = 4      	 # or 8
-p_nt = 8     	 # optional: 8–16 for smoother plasma noise
+p_nz = 2     	 # or 8
+p_nr = 2      	 # or 8
+p_nt = 4     	 # optional: 8–16 for smoother plasma noise
 		 # p_nt ≥ 4 × Nm for proper mode resolution.
 
-def dens_func(z, r):
-    """Uniform plasma density profile."""
-    return np.ones_like(z)
+# ###################
+# Plasma density ramp
+# ################### 
+# Positions (in meters)
+z_start  = 0.0
+z_ramp_up_end   = 1.0e-3
+z_plateau_end   = 6.0e-3
+z_ramp_down_end = 7.0e-3
 
+# Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
+L_interact = z_ramp_down_end                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
+L_dump     = 0.2e-3                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
+
+# ============================================================
+#                     PLASMA DENSITY FUNC
+# ============================================================
+#def dens_func(z, r):
+#    """Uniform plasma density profile."""
+#    return np.ones_like(z)
+    
+def dens_func(z, r):
+    """
+    Returns relative plasma density profile (normalized to 1):
+    - 1 mm up-ramp
+    - 5 mm plateau
+    - 1 mm down-ramp
+    Smooth sin^2 ramps
+    """
+
+    # Initialize relative density (0 → 1)
+    n = np.zeros_like(z)
+
+    # ----------------------
+    # Up ramp (0 → 1 mm)
+    # ----------------------
+    mask_up = (z >= z_start) & (z < z_ramp_up_end)
+    xi = (z[mask_up] - z_start) / (z_ramp_up_end - z_start)
+    n[mask_up] = np.sin(0.5 * np.pi * xi)**2
+
+    # ----------------------
+    # Plateau (1 → 6 mm)
+    # ----------------------
+    mask_plateau = (z >= z_ramp_up_end) & (z < z_plateau_end)
+    n[mask_plateau] = 1.0
+
+    # ----------------------
+    # Down ramp (6 → 7 mm)
+    # ----------------------
+    mask_down = (z >= z_plateau_end) & (z < z_ramp_down_end)
+    xi = (z[mask_down] - z_plateau_end) / (z_ramp_down_end - z_plateau_end)
+    n[mask_down] = np.cos(0.5 * np.pi * xi)**2
+
+    return n
 
 # ============================================================
 #                     MOVING WINDOW SETTINGS
@@ -111,10 +160,8 @@ v_window = c                                        # window moving at speed of 
 # ============================================================
 #                       SIMULATION RUNTIME
 # ============================================================
-L_interact = 20.1e-2                                   # Physical interaction length to simulate (meters)
-L_dump     = 1e-3                                 # Desired spatial diagnostic interval along propagation (meters)
-                                                    # General rule: 50–200 dumps is ideal
-T_interact = (L_interact + (zmax - zmin)) / v_window
+#T_interact = (L_interact + (zmax - zmin)) / v_window
+T_interact = (L_interact + abs(zmin)) / v_window
 
 
 # ============================================================
@@ -136,7 +183,7 @@ smoother = BinomialSmoother(
 #                            USER DATA TO PRINT
 # ============================================================
 # Calculate plasma frequency and plasma wavelength
-wp = np.sqrt(n_e * e**2 / epsilon_0 / m_e)
+wp = np.sqrt(n0 * e**2 / epsilon_0 / m_e)
 lambda_p = 2 * pi * c / wp
 skin_depth = c / wp
 
@@ -180,14 +227,14 @@ if __name__ == "__main__":               # Standard Python entry point guard
         # Plasma shortcut initialization (disabled unless n_e provided)
     	# --------------------------------------------------------
     	p_zmin=p_zmin,               # (float) Minimal z for plasma loading if using built‑in plasma creation
-    	p_zmax=p_zmax,               # (float) Max z for plasma loading
+    #	p_zmax=p_zmax,               # (float) Max z for plasma loading
     	p_rmin=0.0,                  # (float) Minimal r for plasma loading
-    	p_rmax=p_rmax,         	     # (float) Max r for plasma loading
+    #	p_rmax=p_rmax,         	     # (float) Max r for plasma loading
     	p_nz=p_nz,                   # (int) Number of macro‑particles per cell along z (only if n_e used)
     	p_nr=p_nr,                   # (int) Number of macro‑particles per cell along r
     	p_nt=p_nt,                   # (int) Number of macro‑particles per θ
-    	n_e=n_e,                     # (float or None) Plasma density (if provided, auto‑creates electrons)
-    	dens_func=dens_func,         # (callable or None) Density function for plasma loading
+#    	n_e=n0,                     # (float or None) Plasma density (if provided, auto‑creates electrons)
+#    	dens_func=dens_func,         # (callable or None) Density function for plasma loading
 
     	# Current / smoothing / numerical stability
     	# --------------------------------------------------------
@@ -241,7 +288,7 @@ if __name__ == "__main__":               # Standard Python entry point guard
 	
 	# Macroparticle creation (density & profile)
 	# --------------------------------------------------------
-	n = n_e,                            # (float or None)
+	n = n0,                            # (float or None)
                                             # Physical density (particles/m³). If None → NO particles created.
                                             # If set → evenly spaced macroparticles are generated inside the region.
 
@@ -270,7 +317,7 @@ if __name__ == "__main__":               # Standard Python entry point guard
                                             # Minimal z above which particles are initialized.
                                             # Default: box lower z-edge.
 
-    	p_zmax = p_zmax,                    # (float, meters)
+    #	p_zmax = p_zmax,                    # (float, meters)
                                             # Maximal z below which particles are initialized.
                                             # Default: box upper z-edge.
 
@@ -278,7 +325,7 @@ if __name__ == "__main__":               # Standard Python entry point guard
                                             # Minimal r above which particles are initialized.
                                             # Default: 0.
 
-    	p_rmax = p_rmax,                    # (float, meters)
+    #	p_rmax = p_rmax,                    # (float, meters)
                                             # Maximal r below which particles are initialized.
                                             # Default: simulation rmax.
 
@@ -317,7 +364,7 @@ if __name__ == "__main__":               # Standard Python entry point guard
     # --------------------------------------
     # Add driver beam
     # --------------------------------------
-    driver=add_driver(sim)    
+    witness=add_external_witness(sim)    
 
     # --------------------------------------
     # Synchrotron
@@ -325,8 +372,8 @@ if __name__ == "__main__":               # Standard Python entry point guard
     if use_synchrotron:
         synchrotron(
             sim=sim,
-            species=driver,
-            dic_species={"driver": driver},
+            species=witness,
+            dic_species={"ExternalWitness": witness},
             diag_period=diag_period
         )
     
@@ -336,10 +383,10 @@ if __name__ == "__main__":               # Standard Python entry point guard
     d = field_diags(sim, diag_period)
     sim.diags.append(d)
 
-    d = particle_diags(sim, diag_period, species={"driver": driver})
+    d = particle_diags(sim, diag_period, species={"witness": witness})
     sim.diags.append(d)
 
-    d = particle_charge_density_diags(sim, diag_period, species_dict={'driver': driver, 'plasma': elec})
+    d = particle_charge_density_diags(sim, diag_period, species_dict={'witness': witness, 'plasma': elec})
     sim.diags.append(d)
 
     # --------------------------------------

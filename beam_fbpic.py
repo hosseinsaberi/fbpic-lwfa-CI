@@ -10,8 +10,9 @@ q = -e                                               # Particle charge (C): elec
 m = m_e                                              # Particle mass (kg): electron rest mass
 
 # Beam size
-sig_r  = 50e-6                                       # Transverse RMS size (meters)
-sig_z  = 15e-6                                       # Longitudinal RMS size (meters)
+Q = 5e-12 #C
+sig_r  = 20e-6                                       # Transverse RMS size (meters)
+sig_z  = c*10e-15                                       # Longitudinal RMS size (meters)
 n_emit = 2e-6                                        # normalized emittance (m·rad)
 
 # Beam energy
@@ -28,7 +29,8 @@ sig_gamma = dE_E * gamma0                             # RMS energy spread expres
 # FBPIC computes the weight of each macroparticle as w=n_real/n_macro (which is electrons per macroparticle)
 # ★ Increase beam macroparticles (reduces statistical noise)
 # Noise ∝ 1 / √(N_macro) ... ensure to be arounce ~0.2% or less
-n_real  = 9.4e8                                        # Number of physical electrons represented (for charge weighting)
+#n_real  = 9.4e8                                        # Number of physical electrons represented (for charge weighting)
+n_real = Q/e
 #n_macro = int(2e5)     # 200k   (good)               # Number of macroparticles to sample the beam distribution
 n_macro = int(1e6)     # 500k   (very smooth spectra)
 
@@ -40,7 +42,7 @@ tf = 0.0                                             # Time at which the beam is
 # Add driver beam (Gaussian-distributed relativistic bunch)
 # =========================================================
 
-def add_driver(sim):
+def add_external_witness(sim):
 	driver = add_particle_bunch_gaussian(
 	    sim=sim,                             # (Simulation) Target FBPIC Simulation object
 
