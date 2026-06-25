@@ -26,6 +26,10 @@ from scipy.constants import c, e, m_e, epsilon_0, pi, m_p
 # FBPIC core
 from fbpic.main import Simulation 
 
+# laser
+from fbpic.lpa_utils.laser import add_laser_pulse # Add a laser pulse to simulation
+from fbpic.lpa_utils.laser.laser_profiles import GaussianLaser # Define Gaussian laser profile
+
 # Electron beam utilities
 from fbpic.lpa_utils.bunch import add_particle_bunch_gaussian
 
@@ -108,7 +112,7 @@ z_ramp_down_end = 7.0e-3
 
 # Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
 L_interact = z_ramp_down_end                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
-L_dump     = 0.2e-3                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
+L_dump     = 0.1e-3                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
 
 # ============================================================
 #                     PLASMA DENSITY FUNC
@@ -150,6 +154,28 @@ def dens_func(z, r):
     n[mask_down] = np.cos(0.5 * np.pi * xi)**2
 
     return n
+
+# ============================================================
+#                     LASER DRIVER
+# ============================================================
+lambda0 = 0.8e-6   # m
+tau     = 23.e-15  # s
+w0      = 90.e-6   # m
+El      = 2.17     # J
+
+P0 = 0.94 * El / tau                         # W
+I0_Wm2 = 2 * P0 / (pi * w0**2)              # W/m^2
+I0_Wcm2 = I0_Wm2 * 1e-4                     # W/cm^2
+
+a0 = 0.855 * (lambda0 * 1e6) * np.sqrt(I0_Wcm2 / 1e18)
+
+z0 = -20.e-6
+z_foc = 0.e-6
+
+Laser_intensity = I0_Wcm2                   # W/cm^2
+Laser_power = P0                            # W
+Laser_energy = El                           # J
+Laser_Rayleigh_length = pi * w0**2 / lambda0  # m
 
 # ============================================================
 #                     MOVING WINDOW SETTINGS
@@ -198,6 +224,13 @@ print(f"skin_depdth/dr) = {int(skin_depth / dr)}")
 print("====>>> 20–40 cells per skin depth is typical\n")
 print("diag_period =", diag_period)
 print("diag_length =", L_dump, 'm')
+
+print("\n\nLASER PARAMETERS")
+print(f"Laser intensity = {Laser_intensity:.2e} W/cm2")
+print(f"Laser power     = {Laser_power/1e12:.2f} TW")
+print(f"Laser energy    = {Laser_energy:.2e} J")
+print(f"Laser Rayleigh length = {Laser_Rayleigh_length/1e-6:.2f} um")
+print(f"a0     = {a0:.2f}")
 print("//////////////////////////////////////////////////////////")
 
 # ################################################################
@@ -361,6 +394,16 @@ if __name__ == "__main__":               # Standard Python entry point guard
     )
 
 
+    # --------------------------------------
+    # Add laser pulse
+    # --------------------------------------
+    # Load initial fields
+    # Create a Gaussian laser profile
+    laser_profile = GaussianLaser(a0, w0, tau, z0, zf=z_foc)
+    # Add the laser to the fields of the simulation
+    add_laser_pulse( sim, laser_profile)
+
+    
     # --------------------------------------
     # Add driver beam
     # --------------------------------------
