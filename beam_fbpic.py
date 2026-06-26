@@ -35,7 +35,7 @@ n_real = Q/e
 n_macro = int(1e6)     # 500k   (very smooth spectra)
 
 # Beam focus (Where and when the beam reaches its smallest transverse radius.)
-zf = -80e-6                                          # Target longitudinal focus position of the beam (meters)
+zf = -70e-6                                          # Target longitudinal focus position of the beam (meters)
 tf = 0.0                                             # Time at which the beam is focused at zf (seconds)
 
 # =========================================================
