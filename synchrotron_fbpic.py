@@ -8,9 +8,9 @@ import numpy as np
 # ============================================================
 # Synchrotron radiation histogram axes (for emitted photons)
 photon_energy_axis = (                     # 3-tuple: (E_min, E_max, N_bins), energies in Joules
-    100e0 * 1.6e-19,                        # Minimum photon energy (converted from eV → J)
-    3e3*1.6e-19,                        # Maximum photon energy (converted from eV → J)
-    500                                   # Number of energy bins
+    0.01 * 1.6e-19,                        # Minimum photon energy (converted from eV → J)
+    100*1.6e-19,                        # Maximum photon energy (converted from eV → J)
+    1000                                   # Number of energy bins
 )
 theta_axis = (                           # Angular axis (min, max, bins) in radians
     -0.041,                                 # Minimum angle (−50 mrad)

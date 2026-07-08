@@ -32,7 +32,7 @@ sig_gamma = dE_E * gamma0                             # RMS energy spread expres
 #n_real  = 9.4e8                                        # Number of physical electrons represented (for charge weighting)
 n_real = Q/e
 #n_macro = int(2e5)     # 200k   (good)               # Number of macroparticles to sample the beam distribution
-n_macro = int(1e6)     # 500k   (very smooth spectra)
+n_macro = int(2e5)     # 500k   (very smooth spectra)
 
 # Beam focus (Where and when the beam reaches its smallest transverse radius.)
 zf = -70e-6                                          # Target longitudinal focus position of the beam (meters)
