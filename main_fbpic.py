@@ -106,9 +106,9 @@ p_nt = 4     	 # optional: 8–16 for smoother plasma noise
 # ################### 
 # Positions (in meters)
 z_start  = 0.0
-z_ramp_up_end   = 1.0e-3
-z_plateau_end   = 6.0e-3
-z_ramp_down_end = 7.0e-3
+z_ramp_up_end   = 0.0e-3
+z_plateau_end   = 20.0e-3
+z_ramp_down_end = 20.0e-3
 
 # Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
 L_interact = z_ramp_down_end                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
@@ -160,7 +160,7 @@ def dens_func(z, r):
 # ============================================================
 lambda0 = 0.8e-6   # m
 tau     = 23.e-15  # s
-w0      = 90.e-6   # m
+w0      = 30.e-6   # m
 El      = 2.17     # J
 
 P0 = 0.94 * El / tau                         # W
@@ -170,7 +170,7 @@ I0_Wcm2 = I0_Wm2 * 1e-4                     # W/cm^2
 a0 = 0.855 * (lambda0 * 1e6) * np.sqrt(I0_Wcm2 / 1e18)
 
 z0 = -20.e-6
-z_foc = 0.e-6
+z_foc = 10.e-6
 
 Laser_intensity = I0_Wcm2                   # W/cm^2
 Laser_power = P0                            # W
