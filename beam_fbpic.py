@@ -1,5 +1,6 @@
 # beam_fbpic.py
 
+import numpy as np
 from scipy.constants import c, e, m_e, epsilon_0
 from fbpic.lpa_utils.bunch import add_particle_bunch_gaussian
 
@@ -35,8 +36,13 @@ n_real = Q/e
 n_macro = int(2e5)     # 500k   (very smooth spectra)
 
 # Beam focus (Where and when the beam reaches its smallest transverse radius.)
-zf = -70e-6                                          # Target longitudinal focus position of the beam (meters)
-tf = 0.0                                             # Time at which the beam is focused at zf (seconds)
+#zf = -70e-6                                          # Target longitudinal focus position of the beam (meters)
+zf = 8.5e-3   # Focus position [m]
+#tf = 0.0                                             # Time at which the beam is focused at zf (seconds)
+
+z_witness0 = -70e-6  # witness centre
+beta0 = np.sqrt(1 - 1/gamma0**2)
+tf = (zf - z_witness0)/(beta0*c)
 
 # =========================================================
 # Add driver beam (Gaussian-distributed relativistic bunch)

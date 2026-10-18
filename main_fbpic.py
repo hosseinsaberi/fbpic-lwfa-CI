@@ -105,14 +105,14 @@ p_nt = 4     	 # optional: 8–16 for smoother plasma noise
 # Plasma density ramp
 # ################### 
 # Positions (in meters)
-z_start  = 0.0
-z_ramp_up_end   = 0.0e-3
-z_plateau_end   = 20.0e-3
-z_ramp_down_end = 20.0e-3
+z_start  = 0.0			# plasma begins
+z_ramp_up_end   = 1.0e-3	# end of density up-ramp (n reaches n0)
+z_plateau_end   = 16.0e-3	# end of constant-density plateau
+z_ramp_down_end = 17.0e-3	# end of density down-ramp (plasma ends)
 
 # Select L_dump such that you have 50 dump data # General rule: 50–200 dumps is ideal
 L_interact = z_ramp_down_end                                 # Physical interaction length to simulate (meters) - be aware of plasma length as well: p_zmax
-L_dump     = 0.1e-3                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
+L_dump     = 1e-3                                # Desired spatial diagnostic interval along propagation (meters) based on L_interact
 
 # ============================================================
 #                     PLASMA DENSITY FUNC
@@ -158,19 +158,34 @@ def dens_func(z, r):
 # ============================================================
 #                     LASER DRIVER
 # ============================================================
-lambda0 = 0.8e-6   # m
-tau     = 23.e-15  # s
-w0      = 30.e-6   # m
-El      = 2.17     # J
+lambda0 = 0.8e-6   	# Laser wavelength λ0 [m] (800 nm, Ti:Sapphire laser)
+tau     = 23.e-15  	# RMS pulse duration [s]
+                    	# Determines laser pulse length in z (cτ ≈ 6.9 µm)
+w0      = 30.e-6   	# Laser waist radius at focus [m]
+                    	# Radius where intensity falls to 1/e² of peak intensity
+El      = 2.17     	# Laser pulse energy [J]
 
-P0 = 0.94 * El / tau                         # W
-I0_Wm2 = 2 * P0 / (pi * w0**2)              # W/m^2
-I0_Wcm2 = I0_Wm2 * 1e-4                     # W/cm^2
+# Peak laser power (0.94 converts Gaussian pulse energy to peak power)
+P0 = 0.94 * El / tau             # Peak laser power [W]
 
+# Peak intensity at the focus of a Gaussian beam
+I0_Wm2 = 2 * P0 / (pi * w0**2)   # Peak intensity [W/m²]
+
+# Same intensity expressed in W/cm²
+I0_Wcm2 = I0_Wm2 * 1e-4          # Peak intensity [W/cm²]
+
+# Normalized vector potential
+# a0 ≈ 0.855 λ[µm] sqrt(I[10^18 W/cm²])
+# Determines the strength of the laser-plasma interaction
 a0 = 0.855 * (lambda0 * 1e6) * np.sqrt(I0_Wcm2 / 1e18)
 
-z0 = -20.e-6
-z_foc = 10.e-6
+# Initial position of the laser pulse centre at t=0
+z0 = -20.e-6                     # Laser centroid position [m]
+                                 # 20 µm before the plasma entrance
+
+# Position of the laser waist (minimum spot size)
+z_foc = 8.5e-6                   # Laser focus position [m]
+                                 # Laser reaches w0 = 30 µm here
 
 Laser_intensity = I0_Wcm2                   # W/cm^2
 Laser_power = P0                            # W
@@ -408,6 +423,9 @@ if __name__ == "__main__":               # Standard Python entry point guard
     # Add driver beam
     # --------------------------------------
     witness=add_external_witness(sim)    
+    print("Mean z =", witness.z.mean()*1e6, "um")
+    print("Min z =", witness.z.min()*1e6, "um")
+    print("Max z =", witness.z.max()*1e6, "um")
 
     # --------------------------------------
     # Synchrotron
