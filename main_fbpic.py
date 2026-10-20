@@ -64,8 +64,9 @@ use_synchrotron = True # Enable synchrotron radiation module
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
 # Longitudinal box (z in metres)
-Nz   = 2000                                             # Number of grid points along z (longitudinal direction)
-zmin = -140e-6                                         # Left boundary of the box in z (meters)
+Nz   = 3250                                             # Number of grid points along z (longitudinal direction)
+#zmin = -140e-6                                         # Left boundary of the box in z (meters)
+zmin = -240e-6   #(comment: 140 is enough with optimum-this is selected for temporal scan)   # Left boundary of the box in z (meters)
 zmax = 20.0e-6                                             # Right boundary of the box in z (meters)
 dz = (zmax - zmin) / Nz                                # Cell size
 
@@ -184,7 +185,7 @@ z0 = -20.e-6                     # Laser centroid position [m]
                                  # 20 µm before the plasma entrance
 
 # Position of the laser waist (minimum spot size)
-z_foc = 8.5e-6                   # Laser focus position [m]
+z_foc = 8.5e-3                   # Laser focus position [m]
                                  # Laser reaches w0 = 30 µm here
 
 Laser_intensity = I0_Wcm2                   # W/cm^2

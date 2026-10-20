@@ -40,7 +40,18 @@ n_macro = int(2e5)     # 500k   (very smooth spectra)
 zf = 8.5e-3   # Focus position [m]
 #tf = 0.0                                             # Time at which the beam is focused at zf (seconds)
 
-z_witness0 = -70e-6  # witness centre
+
+######################
+# This is temporal scan
+# laser z0=-20 um 
+# lamdap = 106 um
+# scan witness from laser position to 1.5lambdap away
+#z_witness0 = -20e-6  # witness centre = 0
+#z_witness0 = -73e-6  # witness centre = lambdap/2
+#z_witness0 = -126e-6  # witness centre = lambdap
+#z_witness0 = -179e-6  # witness centre = 1.5lambdap
+######################
+z_witness0 = -70e-6  # witness centre (optimum)
 beta0 = np.sqrt(1 - 1/gamma0**2)
 tf = (zf - z_witness0)/(beta0*c)
 
