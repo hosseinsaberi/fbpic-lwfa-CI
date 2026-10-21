@@ -64,9 +64,8 @@ use_synchrotron = True # Enable synchrotron radiation module
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
 # Longitudinal box (z in metres)
-Nz   = 3250                                             # Number of grid points along z (longitudinal direction)
-#zmin = -140e-6                                         # Left boundary of the box in z (meters)
-zmin = -240e-6   #(comment: 140 is enough with optimum-this is selected for temporal scan)   # Left boundary of the box in z (meters)
+Nz   = 2500                                             # Number of grid points along z (longitudinal direction)
+zmin = -200e-6 #-140e-6                                         # Left boundary of the box in z (meters)
 zmax = 20.0e-6                                             # Right boundary of the box in z (meters)
 dz = (zmax - zmin) / Nz                                # Cell size
 
