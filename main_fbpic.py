@@ -63,25 +63,45 @@ use_synchrotron = True # Enable synchrotron radiation module
 # ============================================================
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
-# Longitudinal box (z in metres)
-Nz   = 2500                                             # Number of grid points along z (longitudinal direction)
-zmin = -200e-6 #-140e-6                                         # Left boundary of the box in z (meters)
-zmax = 20.0e-6                                             # Right boundary of the box in z (meters)
-dz = (zmax - zmin) / Nz                                # Cell size
+simulation_mod = 'ideal injection'       # optimum window
+#simulation_mod = 'temporal jitter scan'	 # need long window
 
-# Radial box (r)
-#Nr   = 100                                             # Number of grid points along r (radial direction)
-Nr = 200   						# gives dr ≈ 0.78 µm (similar to before)
-#rmax = 75e-6                                           # Radial box size (meters): 0 <= r <= rmax
-rmax = 300e-6    					# 400 µm  (safe, stable)
+if simulation_mode == 'ideal_injection':
+    # Longitudinal box (z in metres)
+    Nz   = 1600                                             # Number of grid points along z (longitudinal direction)
+    zmin = -140e-6                                         # Left boundary of the box in z (meters)
+    zmax = 20.0e-6                                             # Right boundary of the box in z (meters)
+    dz = (zmax - zmin) / Nz                                # Cell size
 
-dr = rmax / Nr                                         # Cell size
+    # Radial box (r)
+    Nr = 200   						# gives dr ≈ 0.78 µm (similar to before)
+    rmax = 250e-6    					# 400 µm  (safe, stable)
 
-# Azimuthal modes (quasi‑cylindrical)
-Nm = 2                                                 # For example Nm = 2 → 2 modes → m = 0 and m = 1
+    dr = rmax / Nr                                         # Cell size
 
-# Time step (based on dz/c for PSATD)
-dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz → dt = dz/c
+    # Azimuthal modes (quasi‑cylindrical)
+    Nm = 2                                                 # For example Nm = 2 → 2 modes → m = 0 and m = 1
+
+    # Time step (based on dz/c for PSATD)
+    dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz → dt = dz/c
+if simulation_mode == 'temporal jitter scan':
+    # Longitudinal box (z in metres)
+    Nz   = 2600                                             # Number of grid points along z (longitudinal direction)
+    zmin = -240e-6                                         # Left boundary of the box in z (meters)
+    zmax = 20.0e-6                                             # Right boundary of the box in z (meters)
+    dz = (zmax - zmin) / Nz                                # Cell size
+
+    # Radial box (r)
+    Nr = 200   						# gives dr ≈ 0.78 µm (similar to before)
+    rmax = 250e-6    					# 400 µm  (safe, stable)
+
+    dr = rmax / Nr                                         # Cell size
+
+    # Azimuthal modes (quasi‑cylindrical)
+    Nm = 2                                                 # For example Nm = 2 → 2 modes → m = 0 and m = 1
+
+    # Time step (based on dz/c for PSATD)
+    dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz → dt = dz/c
 
 
 # ============================================================
