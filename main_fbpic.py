@@ -443,9 +443,9 @@ if __name__ == "__main__":               # Standard Python entry point guard
     # Add driver beam
     # --------------------------------------
     witness=add_external_witness(sim)    
+    print("Mean x =", witness.x.mean()*1e6, "um")
+    print("Mean y =", witness.y.mean()*1e6, "um")
     print("Mean z =", witness.z.mean()*1e6, "um")
-    print("Min z =", witness.z.min()*1e6, "um")
-    print("Max z =", witness.z.max()*1e6, "um")
 
     # --------------------------------------
     # Synchrotron
