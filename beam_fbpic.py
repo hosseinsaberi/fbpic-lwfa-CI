@@ -44,12 +44,18 @@ zf = 8.5e-3   # Focus position [m]
 ######################
 # This is temporal scan
 # laser z0=-20 um 
-# lamdap = 106 um
-# scan witness from laser position to 1.5lambdap away
-#z_witness0 = -20e-6  # witness centre = 0
-#z_witness0 = -73e-6  # witness centre = lambdap/2
-#z_witness0 = -126e-6  # witness centre = lambdap
-#z_witness0 = -179e-6  # witness centre = 1.5lambdap
+n0 = 1e17 * 1e6
+wp = np.sqrt(n0 * e**2 / epsilon_0 / m_e)
+lambda_p = 2 * pi * c / wp
+
+# scan witness from laser position (20um) to 1.5lambdap away#
+z0_laser = -20e-6 # as in laser parameter
+#z_witness0 = z0_laser - lambda_p/4
+#z_witness0 = z0_laser - lambda_p/2
+#z_witness0 = z0_laser - 3 * lambda_p/4
+#z_witness0 = z0_laser - lambda_p
+#z_witness0 = z0_laser - 5*lambda_p/4
+#z_witness0 = z0_laser - 6*lambda_p/4
 ######################
 z_witness0 = -70e-6  # witness centre (optimum)
 beta0 = np.sqrt(1 - 1/gamma0**2)
