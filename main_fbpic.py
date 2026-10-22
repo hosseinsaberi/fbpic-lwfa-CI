@@ -63,8 +63,8 @@ use_synchrotron = True # Enable synchrotron radiation module
 # ============================================================
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
-simulation_mod = 'ideal injection'       # optimum window
-#simulation_mod = 'temporal jitter scan'	 # need long window
+#simulation_mode = 'ideal_injection'       # optimum window
+simulation_mode = 'temporal_jitter_scan'	 # need long window
 
 if simulation_mode == 'ideal_injection':
     # Longitudinal box (z in metres)
@@ -84,7 +84,7 @@ if simulation_mode == 'ideal_injection':
 
     # Time step (based on dz/c for PSATD)
     dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz → dt = dz/c
-if simulation_mode == 'temporal jitter scan':
+if simulation_mode == 'temporal_jitter_scan':
     # Longitudinal box (z in metres)
     Nz   = 2600                                             # Number of grid points along z (longitudinal direction)
     zmin = -240e-6                                         # Left boundary of the box in z (meters)
