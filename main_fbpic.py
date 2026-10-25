@@ -463,7 +463,29 @@ if __name__ == "__main__":               # Standard Python entry point guard
     # --------------------------------------
     witness=add_external_witness(sim)    
     if simulation_mode == 'spatial_jitter_scan':
-        witness.x += w0
+        # on axis
+        #witness.x += 0.
+        #witness.y += 0.
+        
+        # off axis of w0
+        #witness.x += w0
+        #witness.y += 0.
+        
+        #witness.x += 0.
+        #witness.y += w0
+        
+        #witness.x += w0
+        #witness.y += w0
+        
+        # off axis of 2w0
+        #witness.x += 2. * w0
+        #witness.y += 0.
+        
+        #witness.x += 0.
+        #witness.y += 2. * w0
+        
+        #witness.x += 2. * w0
+        #witness.y += 2. * w0
     
     xe = witness.x
     ye = witness.y
