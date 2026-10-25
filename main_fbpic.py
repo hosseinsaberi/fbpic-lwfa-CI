@@ -464,9 +464,33 @@ if __name__ == "__main__":               # Standard Python entry point guard
     witness=add_external_witness(sim)    
     if simulation_mode == 'spatial_jitter_scan':
         witness.x += w0
-    print("Mean x =", witness.x.mean()*1e6, "um")
-    print("Mean y =", witness.y.mean()*1e6, "um")
-    print("Mean z =", witness.z.mean()*1e6, "um")
+    
+    xe = witness.x
+    ye = witness.y
+    ze = witness.z
+    we = witness.w    
+    
+    # Weighted mean
+    x_mean = np.average(xe, weights=we)  
+    y_mean = np.average(ye, weights=we)
+    z_mean = np.average(ze, weights=we)
+      
+    # Weighted RMS beam size (σx)
+    sigma_x = np.sqrt(np.average((xe - x_mean)**2, weights=we))
+    sigma_y = np.sqrt(np.average((ye - y_mean)**2, weights=we))
+    sigma_r = np.sqrt(sigma_x**2 + sigma_y**2)
+
+    print(f"Mean x = {x_mean*1e6:.1f} um")
+    print(f"Mean y = {y_mean*1e6:.1f} um")
+    print(f"Mean z = {z_mean*1e6:.1f} um")
+    
+    print(f"Weighted RMS x = {sigma_x*1e6:.1f} um")
+    print(f"Weighted RMS y = {sigma_y*1e6:.1f} um")
+    print(f"Weighted RMS radius = {sigma_r*1e6:.1f} um")
+    
+    #rint("Mean x =", witness.x.mean()*1e6, "um")
+    #print("Mean y =", witness.y.mean()*1e6, "um")
+    #print("Mean z =", witness.z.mean()*1e6, "um")
 
     # --------------------------------------
     # Synchrotron
