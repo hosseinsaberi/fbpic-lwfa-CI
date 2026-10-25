@@ -64,7 +64,8 @@ use_synchrotron = True # Enable synchrotron radiation module
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
 #simulation_mode = 'ideal_injection'       # optimum window
-simulation_mode = 'temporal_jitter_scan'	 # need long window
+#simulation_mode = 'temporal_jitter_scan'	 # need long window
+simulation_mode = 'spatial_jitter_scan'	 # need long window
 
 if simulation_mode == 'ideal_injection':
     # Longitudinal box (z in metres)
@@ -99,6 +100,24 @@ if simulation_mode == 'temporal_jitter_scan':
 
     # Azimuthal modes (quasi‑cylindrical)
     Nm = 2                                                 # For example Nm = 2 → 2 modes → m = 0 and m = 1
+
+    # Time step (based on dz/c for PSATD)
+    dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz → dt = dz/c
+if simulation_mode == 'spatial_jitter_scan':
+    # Longitudinal box (z in metres)
+    Nz   = 1600                                             # Number of grid points along z (longitudinal direction)
+    zmin = -140e-6                                         # Left boundary of the box in z (meters)
+    zmax = 20.0e-6                                             # Right boundary of the box in z (meters)
+    dz = (zmax - zmin) / Nz                                # Cell size
+
+    # Radial box (r)
+    Nr = 400   						# gives dr ≈ 0.78 µm (similar to before)
+    rmax = 500e-6    					# 400 µm  (safe, stable)
+
+    dr = rmax / Nr                                         # Cell size
+
+    # Azimuthal modes (quasi‑cylindrical)
+    Nm = 3                                                 # For example Nm = 2 → 2 modes → m = 0 and m = 1
 
     # Time step (based on dz/c for PSATD)
     dt = (zmax - zmin) / (Nz * c)                          # dz = (zmax - zmin)/Nz → dt = dz/c
@@ -443,6 +462,8 @@ if __name__ == "__main__":               # Standard Python entry point guard
     # Add driver beam
     # --------------------------------------
     witness=add_external_witness(sim)    
+    if simulation_mode == 'spatial_jitter_scan':
+        witness.x += w0
     print("Mean x =", witness.x.mean()*1e6, "um")
     print("Mean y =", witness.y.mean()*1e6, "um")
     print("Mean z =", witness.z.mean()*1e6, "um")

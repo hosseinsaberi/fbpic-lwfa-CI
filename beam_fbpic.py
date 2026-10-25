@@ -1,7 +1,7 @@
 # beam_fbpic.py
 
 import numpy as np
-from scipy.constants import c, e, m_e, epsilon_0
+from scipy.constants import c, e, m_e, epsilon_0, pi
 from fbpic.lpa_utils.bunch import add_particle_bunch_gaussian
 
 # ============================================================
