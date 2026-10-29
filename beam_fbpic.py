@@ -51,9 +51,13 @@ lambda_p = 2 * pi * c / wp
 # scan witness from laser position (20um) to 1.5lambdap away#
 z0_laser = -20e-6 # as in laser parameter
 #z_witness0 = z0_laser
+#z_witness0 = z0_laser - lambda_p/8
 #z_witness0 = z0_laser - lambda_p/4
+#z_witness0 = z0_laser - 3*lambda_p/8
 #z_witness0 = z0_laser - lambda_p/2
-#z_witness0 = z0_laser - 3 * lambda_p/4
+#z_witness0 = z0_laser - 5*lambda_p/8
+#z_witness0 = z0_laser - 6*lambda_p/8
+#z_witness0 = z0_laser - 7*lambda_p/8
 #z_witness0 = z0_laser - lambda_p
 #z_witness0 = z0_laser - 5*lambda_p/4
 #z_witness0 = z0_laser - 6*lambda_p/4

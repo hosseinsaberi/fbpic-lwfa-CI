@@ -64,8 +64,8 @@ use_synchrotron = True # Enable synchrotron radiation module
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
 simulation_mode = 'ideal_injection'       # optimum window
-#simulation_mode = 'temporal_jitter_scan'	 # need long window
-#simulation_mode = 'spatial_jitter_scan'	 # need long window
+#simulation_mode = 'temporal_jitter_scan'	 # if selected, then change the witness temporal injection in beam file
+#simulation_mode = 'spatial_jitter_scan'	 # if selected, change beam position below in this file
 
 if simulation_mode == 'ideal_injection':
     # Longitudinal box (z in metres)
