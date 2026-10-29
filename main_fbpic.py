@@ -63,9 +63,9 @@ use_synchrotron = True # Enable synchrotron radiation module
 # ============================================================
 #                 SIMULATION BOX GEOMETRY
 # ============================================================
-#simulation_mode = 'ideal_injection'       # optimum window
+simulation_mode = 'ideal_injection'       # optimum window
 #simulation_mode = 'temporal_jitter_scan'	 # need long window
-simulation_mode = 'spatial_jitter_scan'	 # need long window
+#simulation_mode = 'spatial_jitter_scan'	 # need long window
 
 if simulation_mode == 'ideal_injection':
     # Longitudinal box (z in metres)
